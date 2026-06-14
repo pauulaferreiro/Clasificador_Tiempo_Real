@@ -266,16 +266,6 @@ def append_to_live_csv(out_csv: Path, service_name: str, frames_dir: str, xml_pa
         ])
 
 def generate_eit_xml(event: RunningEvent, service_id: int, xml_out_path: Path):
-    """
-    Genera un XML EIT compatible con PIPELINE_TIEMPO_REAL.py.
-
-    El pipeline correcto espera:
-    - event.get("start_time")
-    - event.get("duration")
-    - event.get("running_status")
-    - short_event_descriptor/event_name
-    - extended_event_descriptor/text
-    """
 
     xml_out_path.parent.mkdir(parents=True, exist_ok=True)
 
@@ -340,13 +330,11 @@ def start_event_processor(service: ServiceState, event: RunningEvent, frames_bas
     event_eit_dir = eit_base_dir / safe_srv
     xml_out_path = event_eit_dir / f"{service.fragment_index:03d}_{safe_ev}_{timestamp}.xml"
 
-    # 1. Extraemos y guardamos la EIT instantáneamente
+    # Extraemos y guardamos la EIT 
     generate_eit_xml(event, service.service_id, xml_out_path)
-    
-    # 2. Actualizamos CSV
+
     append_to_live_csv(csv_path, safe_srv, str(event_frames_dir), str(xml_out_path), event)
 
-    # 3. Preparamos el comando FFmpeg PERO NO LO LANZAMOS TODAVÍA
     cmd = ["ffmpeg", "-f", "mpegts", "-i", "pipe:0"]
     if frame_mode == "IFRAMES": cmd += ["-vf", "select='eq(pict_type,PICT_TYPE_I)'", "-vsync", "vfr"]
     elif frame_mode == "EVERY_N_SECONDS": cmd += ["-vf", f"fps={1.0/seconds}"]
