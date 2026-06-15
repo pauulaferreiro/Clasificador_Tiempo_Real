@@ -12,7 +12,7 @@ from skimage.metrics import structural_similarity as ssim
 from logger_config import log, monitor_latency
 from metrics_monitor import aggregate_metric_dicts
 
-from PRUEBA import VideoClassifier
+from pipeline import VideoClassifier
 
 
 def get_sequence_number(filepath: str) -> int:
