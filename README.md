@@ -2,7 +2,7 @@
 
 Este proyecto es un sistema asíncrono que ingiere señales de televisión en vivo (MPEG-TS por UDP), extrae sus metadatos (EIT) y frames, y utiliza un modelo de IA multimodal (`Ministral-3-3B`) para clasificar el tipo de programa emitido en tiempo real.
 
-## ⚙️ Arquitectura y Flujo del Sistema
+## Arquitectura y Flujo del Sistema
 
 El sistema se divide en dos procesos independientes. El siguiente diagrama detalla la arquitectura y el procesado implementado:
 
