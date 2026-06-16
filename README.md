@@ -28,7 +28,8 @@ El sistema se divide en dos procesos independientes. El siguiente diagrama detal
 * FFmpeg instalado en el sistema operativo.
 * Dependencias de Python:
   ```
-  pip install torch torchvision transformers pillow opencv-python scikit-image psutil pynvml pyRAPL 
+  pip install torch torchvision transformers pillow opencv-python scikit-image psutil pynvml pyRAPL
+  ```
 * En entornos Intel, es necesario habilitar los permisos de lectura ejecutando previamente el comando: `sudo chmod -R a+r /sys/class/powercap/intel-rapl`
 
 
@@ -47,7 +48,7 @@ Adicionalmente y de manera opcional, se pueden integrar diferentes modos de conf
 Los umbrales del filtrado se puede modificar, utilizando:
 
 * **`--ssim-threshold` :** Umbral de similitud (SSIM). Mide la similitud entre el frame de referencia (en este caso, el analizado previamente), y el actual. Preestablecido en 0,6.
-* **`--laplacian-min` :** Umbral mínimo de Laplaciano. Permite eliminar imágenes sin contenido estructural útil, como imágenes en negro o con figuras irrelevantes (como logos grandes). Prestablecudo en 70.
+* **`--laplacian-min` :** Umbral mínimo de Laplaciano. Permite eliminar imágenes sin contenido estructural útil, como imágenes en negro o con figuras irrelevantes (como logos grandes). Preestablecido en 70.
 * **`--laplacian-max` :** Umbral máximo de Laplaciano. Permite eliminar aquellos frames con exceso de altas frecuencias, debido a la captura sobre secuencias con alto movimiento que han perdido información útil. Preestablecido en 1500.
 
 ### Paso 2. Terminal 2: Iniciar la Ingesta de Señal
