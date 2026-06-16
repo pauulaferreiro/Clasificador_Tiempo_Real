@@ -41,7 +41,7 @@ El sistema está diseñado de forma desacoplada, por lo que **es obligatorio eje
 Abre una terminal y ejecuta el siguiente comando. Este proceso se quedará en bucle infinito esperando a que lleguen nuevos frames y metadatos generados por el receptor. Es recomendado ejecutar primero este comando para que el controlador se quede "escuchando" antes de iniciar la recepción de la señal.
 ```
 python controller.py
-
+```
 
 Adicionalmente y de manera opcional, se pueden integrar diferentes modos de configuración y de organización de carpetas. 
 Los umbrales del filtrado se puede modificar, utilizando:
