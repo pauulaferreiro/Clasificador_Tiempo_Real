@@ -1,386 +1,78 @@
-# Clasificador de Contenidos en Tiempo Real
+# Clasificador de Contenidos DVB en Tiempo Real
 
-Este proyecto ejecuta un sistema en tiempo real compuesto por dos procesos principales:
+Este proyecto es un sistema asíncrono que ingiere señales de televisión en vivo (MPEG-TS por UDP), extrae sus metadatos (EIT) y frames, y utiliza un modelo de IA multimodal (`Ministral-3-3B`) para clasificar el tipo de programa emitido en tiempo real.
 
-1. Un **controlador/clasificador** que monitoriza los frames y metadatos generados.
-2. Un **receptor de señal** que recibe la señal MPEG-TS por UDP, extrae la información EIT y genera frames de vídeo.
+## ⚙️ Arquitectura y Flujo del Sistema
 
-La ejecución se realiza en **dos terminales independientes**.
+El sistema se divide en dos procesos independientes. El siguiente diagrama detalla la arquitectura y el procesado implementado:
 
----
+![Diagrama de Flujo del Proceso](diagrama.png)
 
-## Estructura de ejecución
+**Leyenda de colores:**
+* **Azul:** Punto de origen (Señal de entrada UDP/MPEG-TS).
+* **Naranja:** Procesos de extracción, reensamblado de tablas DVB e inferencia de la IA.
+* **Verde:** Puntos de control de flujo y filtrado (detección de emisión, umbrales Laplaciano y SSIM).
+* **Violeta:** Outputs y archivos generados por el sistema. 
+    * **Archivos `.xml`**: Contienen los metadatos extraídos de la tabla EIT para cada evento. Incluye el título del programa, descripción extendida, horario y calificación por edades en BRUTO.
+    * **Archivos `.jpg`**: Son los frames extraídos del flujo de vídeo original mediante FFmpeg.
+    * **Archivos `.csv`**: Se generan dos archivos independientes:
+        1. `dataset_tiempo_real.csv`: Un registro bruto que anota todo lo que se captura (evento, horario, duración y la categoría original dada por el radiodifusor).
+        2. `reporte_final_predicciones.csv`: El informe de resultados finales dados por el sistema. Incluye información sobre el número de frames analizados, la predicción final de MLLM, y los diferentes valores establecidos para los umbrales.
+    * **Archivos `.json`**: Archivos con la información detallada por evento a nivel de inferencia. Contienen el análisis exhaustivo frame a frame, incluyendo la predicción del MLLM, su porcentaje de confianza, la justificación de la decisión (_reasoning_) y métricas de rendimiento del hardware
+* **Blanco/Negro:** Acciones rutinarias y bucles.
 
-```text
-Terminal 1:
-python controller.py
+* 
 
-Terminal 2:
-python receiver_signal.py ...
+## Requisitos Previos
+
+* Python 3.10+
+* FFmpeg instalado en el sistema operativo.
+* Dependencias de Python:
+  ```
+  pip install torch torchvision transformers pillow opencv-python scikit-image psutil pynvml pyRAPL ```
+* En entornos Intel, es necesario habilitar los permisos de lectura ejecutando previamente el comando: `sudo chmod -R a+r /sys/class/powercap/intel-rapl`
+
+
+## Ejecución del Sistema (2 TERMINALES)
+
+El sistema está diseñado de forma desacoplada, por lo que **es obligatorio ejecutar dos procesos en terminales independientes**. 
+
+
+### Paso 1. Terminal 1: Iniciar el Controlador 
+Abre una terminal y ejecuta el siguiente comando. Este proceso se quedará en bucle infinito esperando a que lleguen nuevos frames y metadatos generados por el receptor. Es recomendado ejecutar primero este comando para que el controlador se quede "escuchando" antes de iniciar la recepción de la señal.
 ```
-
----
-
-## Scripts utilizados
-
-### Terminal 1: controlador y clasificador
-
-Al ejecutar:
-
-```bash
-python controller.py
-```
-
-se utiliza directamente el script:
-
-```text
-controller.py
-```
-
-Este script, además, importa y utiliza los siguientes módulos auxiliares:
-
-```text
-logger_config.py
-metrics_monitor.py
-pipeline.py
-```
-
-Por tanto, la ejecución del controlador depende de:
-
-```text
-controller.py
-logger_config.py
-metrics_monitor.py
-pipeline.py
-```
-
-#### Función de cada script
-
-| Script | Función |
-|---|---|
-| `controller.py` | Ejecutor principal de clasificación. Monitoriza las carpetas de frames y XML EIT, filtra frames, llama al modelo y guarda resultados. |
-| `logger_config.py` | Configura los logs del sistema y registra latencias de ejecución. |
-| `metrics_monitor.py` | Calcula y agrega métricas de rendimiento como latencia, consumo energético, uso de GPU/CPU, memoria y tokens. |
-| `pipeline.py` | Contiene la clase `VideoClassifier`, encargada de cargar el modelo multimodal y clasificar los frames usando imagen + metadatos EIT. |
-
----
-
-### Terminal 2: receptor de señal
-
-Al ejecutar:
-
-```bash
-python receiver_signal.py ...
-```
-
-se utiliza directamente:
-
-```text
-receiver_signal.py
-```
-
-Por tanto, la ejecución del receptor depende de:
-
-```text
-receiver_signal.py
-```
-
-#### Función de `receiver_signal.py`
-
-El script `receiver_signal.py` se encarga de:
-
-- Recibir una señal MPEG-TS por UDP.
-- Parsear las tablas DVB:
-  - PAT
-  - PMT
-  - SDT
-  - EIT
-- Detectar eventos en emisión.
-- Generar XML con la información EIT del evento.
-- Crear carpetas de salida por servicio y evento.
-- Lanzar FFmpeg para extraer frames del vídeo.
-- Guardar un CSV con información de los eventos detectados.
-
----
-
-## Requisitos previos
-
-Antes de ejecutar el sistema, asegúrate de tener instalados:
-
-- Python 3.10 o superior.
-- FFmpeg.
-- PyTorch con soporte CUDA, si se va a usar GPU.
-- Las librerías de Python necesarias para los scripts.
-
-Instalación recomendada de dependencias:
-
-```bash
-pip install torch torchvision transformers pillow opencv-python scikit-image psutil
-```
-
-Si se van a medir métricas de GPU y CPU:
-
-```bash
-pip install nvidia-ml-py pyRAPL
-```
-En entornos Intel, es necesario habilitar los permisos de lectura del sistema mediante el comando: sudo chmod -R a+r /sys/class/powercap/intel-rapl
-
----
-
-## Flujo general del sistema
-
-El sistema funciona de la siguiente manera:
-
-```text
-Señal UDP/MPEG-TS
-        |
-        v
-receiver_signal.py
-        |
-        |-- Extrae XML EIT
-        |-- Extrae frames con FFmpeg
-        v
-RESULTADOS_MUX/
-        |
-        |-- frames_seleccionados/
-        |-- eit_extraidas/
-        |-- dataset_tiempo_real.csv
-        |
-        v
-controller.py
-        |
-        |-- Lee frames nuevos
-        |-- Lee XML EIT
-        |-- Filtra frames por calidad y similitud
-        |-- Clasifica con VideoClassifier
-        |-- Guarda JSON y CSV final
-        v
-resultados_frames/
-RESULTADOS_MUX/reporte_final_predicciones.csv
-```
-
----
-
-## Ejecución paso a paso
-
-### 1. Abrir el primer terminal
-
-En el primer terminal, ejecutar el controlador:
-
-```bash
 python controller.py
 ```
 
-Este proceso quedará activo esperando a que aparezcan frames y XML generados por el receptor.
+Adicionalmente y de manera opcional, se pueden integrar diferentes modos de configuración y de organización de carpetas. 
+Los umbrales del filtrado se puede modificar, utilizando:
 
-Por defecto, `controller.py` busca los datos en:
+* **`--ssim-threshold` :** Umbral de similitud (SSIM). Mide la similitud entre el frame de referencia (en este caso, el analizado previamente), y el actual. Preestablecido en 0,6.
+* **`--laplacian-min` :** Umbral mínimo de Laplaciano. Permite eliminar imágenes sin contenido estructural útil, como imágenes en negro o con figuras irrelevantes (como logos grandes). Prestablecudo en 70.
+* **`--laplacian-max` :** Umbral máximo de Laplaciano. Permite eliminar aquellos frames con exceso de altas frecuencias, debido a la captura sobre secuencias con alto movimiento que han perdido información útil. Preestablecido en 1500.
 
-```text
-./RESULTADOS_MUX/frames_seleccionados
-./RESULTADOS_MUX/eit_extraidas
+### Paso 2. Terminal 2: Iniciar la Ingesta de Señal
+En una **nueva ventana de terminal** se sintoniza el flujo UDP. En cuanto detecte un programa en emisión, comenzará el proceso de extracción de datos y de frames (a partir del comando FFMPEG).
+Para realizar este ejecución, es obligatorio la inclusión de la dirección y el puerto, y la duración total de la captura (en segundos). 
+
+```
+python receiver_signal.py --record-ip udp://X.X.X.X:YYYY --record-seconds 3600
 ```
 
-y guarda resultados en:
-
-```text
-./resultados_frames
-./RESULTADOS_MUX/reporte_final_predicciones.csv
-```
+Adicionalmente y de manera opcional, se pueden integrar diferentes modos de configuración como la estrategia de extracción de frames, el intervalo temporal entre extracciones, o la carpeta de almacenamiento de estos.
 
 ---
 
-### 2. Abrir el segundo terminal
+## Estructura de Salida 
 
-En el segundo terminal, ejecutar el receptor de señal:
+A medida que el sistema avanza, generará automáticamente un árbol de archivos. Cabe destacar que el sistema produce **dos archivos CSV distintos**, cada uno con un propósito específico:
 
-```bash
-python receiver_signal.py --record-ip udp://IP:PUERTO --record-seconds DURACION
-```
-
-Ejemplo con una señal multicast:
-
-```bash
-python receiver_signal.py --record-ip udp://239.0.0.1:1234 --record-seconds 3600
-```
-
-Ejemplo con una señal local:
-
-```bash
-python receiver_signal.py --record-ip udp://127.0.0.1:1234 --record-seconds 3600
-```
-
----
-
-## Parámetros principales de `controller.py`
-
-`controller.py` puede ejecutarse con sus valores por defecto:
-
-```bash
-python controller.py
-```
-
-También permite configurar rutas y parámetros de filtrado:
-
-```bash
-python controller.py \
-  --base-frames-dir ./RESULTADOS_MUX/frames_seleccionados \
-  --base-eit-dir ./RESULTADOS_MUX/eit_extraidas \
-  --json-out-dir ./resultados_frames \
-  --final-csv ./RESULTADOS_MUX/reporte_final_predicciones.csv \
-  --poll-interval 5 \
-  --ssim-threshold 0.6 \
-  --laplacian-min 70.0 \
-  --laplacian-max 1500.0
-```
-
-### Parámetros disponibles
-
-| Parámetro | Descripción | Valor por defecto |
-|---|---|---|
-| `--base-frames-dir` | Carpeta raíz donde se buscan los frames generados. | `./RESULTADOS_MUX/frames_seleccionados` |
-| `--base-eit-dir` | Carpeta raíz donde se buscan los XML EIT. | `./RESULTADOS_MUX/eit_extraidas` |
-| `--json-out-dir` | Carpeta donde se guardan los JSON de predicción. | `./resultados_frames` |
-| `--final-csv` | CSV final con la predicción global por evento. | `./RESULTADOS_MUX/reporte_final_predicciones.csv` |
-| `--poll-interval` | Tiempo, en segundos, entre escaneos de carpetas. | `5` |
-| `--ssim-threshold` | Umbral SSIM para descartar frames demasiado similares. | `0.6` |
-| `--laplacian-min` | Umbral mínimo de nitidez. Frames por debajo se descartan por borrosos. | `70.0` |
-| `--laplacian-max` | Umbral máximo de Laplaciano. Frames por encima se descartan por ruido o artefactos. | `1500.0` |
-
----
-
-## Parámetros principales de `receiver_signal.py`
-
-La ejecución básica es:
-
-```bash
-python receiver_signal.py --record-ip udp://IP:PUERTO --record-seconds DURACION
-```
-
-Ejemplo:
-
-```bash
-python receiver_signal.py \
-  --record-ip udp://239.0.0.1:1234 \
-  --record-seconds 3600
-```
-
-### Parámetros habituales
-
-| Parámetro | Descripción |
-|---|---|
-| `--record-ip` | Dirección UDP de entrada en formato `udp://IP:PUERTO`. |
-| `--record-seconds` | Duración total de la captura en segundos. |
-| `--output-dir` | Carpeta raíz donde se guardan frames, XML y CSV. |
-| `--frame-mode` | Modo de extracción de frames. |
-| `--seconds` | Intervalo entre frames cuando se usa extracción temporal. |
-| `--max-frames` | Número máximo de frames a extraer por evento. |
-| `--margin-seconds` | Margen de espera antes de comenzar la extracción de frames tras detectar un evento. |
-
----
-
-## Carpetas de salida
-
-Durante la ejecución, `receiver_signal.py` genera una estructura como la siguiente:
-
-```text
-RESULTADOS_MUX/
-├── frames_seleccionados/
-│   └── SERVICIO/
-│       └── EVENTO/
-│           ├── frame_00001.jpg
-│           ├── frame_00002.jpg
-│           └── ...
-│
-├── eit_extraidas/
-│   └── SERVICIO/
-│       └── EVENTO.xml
-│
-└── dataset_tiempo_real.csv
-```
-
-Posteriormente, `controller.py` genera:
-
-```text
-resultados_frames/
-└── SERVICIO/
-    └── EVENTO.json
-
-RESULTADOS_MUX/
-└── reporte_final_predicciones.csv
-```
-
----
-
-## Orden correcto de ejecución
-
-El orden recomendado es:
-
-### Terminal 1
-
-```bash
-python controller.py
-```
-
-### Terminal 2
-
-```bash
-python receiver_signal.py --record-ip udp://239.0.0.1:1234 --record-seconds 3600
-```
-
-El motivo de este orden es que `controller.py` queda esperando a que aparezcan nuevas carpetas de frames y XML. Cuando `receiver_signal.py` detecta un evento y genera los datos, el controlador los procesa automáticamente.
-
----
-
-## Resultado esperado
-
-Durante la ejecución se obtienen:
-
-1. Frames extraídos de la emisión.
-2. XML EIT por evento.
-3. JSON con predicciones por frame.
-4. CSV final con la predicción global del evento.
-5. Logs de ejecución y latencia.
-
----
-
-## Logs
-
-Los logs se guardan en la carpeta:
-
-```text
-logs/
-```
-
-Archivos principales:
-
-```text
-video_classifier.log
-latency.log
-```
-
----
-
-## Resumen de uso rápido
-
-```bash
-# Terminal 1
-python controller.py
-```
-
-```bash
-# Terminal 2
-python receiver_signal.py --record-ip udp://239.0.0.1:1234 --record-seconds 3600
-```
-
-Scripts usados:
-
-```text
-Terminal 1:
-- controller.py
-- logger_config.py
-- metrics_monitor.py
-- PRUEBA.py
-
-Terminal 2:
-- receiver_signal.py
-```
+1. **Outputs de Ingesta:**
+   * `RESULTADOS_MUX/frames_seleccionados/`: Imágenes (.jpg) extraídas, organizadas por servicio y evento.
+   * `RESULTADOS_MUX/eit_extraidas/`: Metadatos de la guía (EIT) de cada programa en formato XML.
+   * `RESULTADOS_MUX/dataset_tiempo_real.csv`: Registro bruto de ingesta. Anota todos los eventos detectados , sus marcas de tiempo y la categoría original de la etiqueta  DVB.
+     
+2. **Outputs del Controlador:**
+   * `RESULTADOS_MUX/reporte_final_predicciones.csv`: Resumen inteligente. Contiene la categoría ganadora calculada por el MLLM tras analizar el programa emitido. Incluye además el número de frames analizados y los umbrales establecidos en esa ejecución.
+   * `resultados_frames/`: Archivos JSON con la clasificación detallada frame a frame (voto del MLLM, nivel de confianza, razonamiento y métricas de consumo de Hardware).
+   * `logs/`: Archivos de depuración (`video_classifier.log`) y registro de latencias puras (`latency.log`).
