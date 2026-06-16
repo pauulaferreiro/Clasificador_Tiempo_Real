@@ -61,8 +61,6 @@ python receiver_signal.py --record-ip udp://X.X.X.X:YYYY --record-seconds 3600
 
 Adicionalmente y de manera opcional, se pueden integrar diferentes modos de configuración como la estrategia de extracción de frames, el intervalo temporal entre extracciones, o la carpeta de almacenamiento de estos.
 
----
-
 ## Estructura de Salida 
 
 A medida que el sistema avanza, generará automáticamente un árbol de archivos. Cabe destacar que el sistema produce **dos archivos CSV distintos**, cada uno con un propósito específico:
