@@ -1,4 +1,4 @@
-# Clasificador de Contenidos DVB en Tiempo Real
+# Clasificador de Contenidos en Tiempo Real
 
 Este proyecto es un sistema asíncrono que ingiere señales de televisión en vivo (MPEG-TS por UDP), extrae sus metadatos (EIT) y frames, y utiliza un modelo de IA multimodal (`Ministral-3-3B`) para clasificar el tipo de programa emitido en tiempo real.
 
