@@ -4,9 +4,9 @@ Este proyecto es un sistema asíncrono que ingiere señales de televisión en vi
 
 ## Arquitectura y Flujo del Sistema
 
-El sistema se divide en dos procesos independientes. El siguiente diagrama detalla la arquitectura y el procesado implementado:
+El sistema se divide en tres procesos independientes. El siguiente diagrama detalla la arquitectura y el procesado implementado:
 
-![Diagrama de Flujo del Proceso](diagrama.png)
+![Diagrama de Flujo del Proceso](clasificador_tiempo_real.png)
 
 **Leyenda de colores:**
 * **Azul:** Punto de origen (Señal de entrada UDP/MPEG-TS).
@@ -15,12 +15,12 @@ El sistema se divide en dos procesos independientes. El siguiente diagrama detal
 * **Violeta:** Outputs y archivos generados por el sistema. 
     * **Archivos `.xml`**: Contienen los metadatos extraídos de la tabla EIT para cada evento. Incluye el título del programa, descripción extendida, horario y calificación por edades en BRUTO.
     * **Archivos `.jpg`**: Son los frames extraídos del flujo de vídeo original mediante FFmpeg.
-    * **Archivos `.csv`**: Se generan dos archivos independientes:
+    * **Archivos `.csv`**: Se generan tres archivos independientes:
         1. `dataset_tiempo_real.csv`: Un registro bruto que anota todo lo que se captura (evento, horario, duración y la categoría original dada por el radiodifusor).
         2. `reporte_final_predicciones.csv`: El informe de resultados finales dados por el sistema. Incluye información sobre el número de frames analizados, la predicción final de MLLM, y los diferentes valores establecidos para los umbrales.
         3. `system_monitor.csv`: Serie temporal con muestras de consumo energético, potencia, uso de hardware del sistema y de los subprocesos del proyecto.
     * **Archivos `.json`**: Archivos con la información detallada por evento a nivel de inferencia. Contienen el análisis exhaustivo frame a frame, incluyendo la predicción del MLLM, su porcentaje de confianza, la justificación de la decisión (_reasoning_) y métricas de rendimiento del hardware
-    * * **Archivos `.txt`**: `system_monitor_report.txt` recopila el informe financiero global (coste total de la sesión, estimaciones por hora/día/mes, medias y picos de hardware). El dato `€/kWh`se puede modificar de manera libre.
+    * **Archivos `.txt`**: `system_monitor_report.txt` recopila el informe financiero global (coste total de la sesión, estimaciones por hora/día/mes, medias y picos de hardware). El dato `€/kWh`se puede modificar de manera libre.
 * **Blanco/Negro:** Acciones rutinarias y bucles.
 
 
@@ -35,9 +35,9 @@ El sistema se divide en dos procesos independientes. El siguiente diagrama detal
 * En entornos Intel, es necesario habilitar los permisos de lectura ejecutando previamente el comando: `sudo chmod -R a+r /sys/class/powercap/intel-rapl`
 
 
-## Ejecución del Sistema (2 TERMINALES)
+## Ejecución del Sistema (3 TERMINALES)
 
-El sistema está diseñado de forma desacoplada, por lo que **es obligatorio ejecutar dos procesos en terminales independientes**. 
+El sistema está diseñado de forma desacoplada, por lo que **es obligatorio ejecutar tres procesos en terminales independientes**. 
 
 
 ### Paso 1. Terminal 1: Iniciar el Controlador 
@@ -73,7 +73,7 @@ python system_monitor.py
 
 ## Estructura de Salida 
 
-A medida que el sistema avanza, generará automáticamente un árbol de archivos. Cabe destacar que el sistema produce **dos archivos CSV distintos**, cada uno con un propósito específico:
+A medida que el sistema avanza, generará automáticamente un árbol de archivos. Cabe destacar que el sistema produce **tres archivos CSV distintos**, cada uno con un propósito específico:
 
 1. **Outputs de Ingesta:**
    * `RESULTADOS_MUX/frames_seleccionados/`: Imágenes (.jpg) extraídas, organizadas por servicio y evento.
