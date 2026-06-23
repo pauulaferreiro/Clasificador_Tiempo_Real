@@ -165,7 +165,7 @@ def filter_candidate_frames(
     previous_analyzed_frame: str = None,
     ssim_threshold: float = 0.6,
     laplacian_min: float = 70.0,
-    laplacian_max: float = 1500.0
+    laplacian_max: float = 2300.0
 ):
 
     accepted_frames = []
@@ -323,7 +323,7 @@ def main():
     parser.add_argument(
         "--laplacian-max",
         type=float,
-        default=1500.0,
+        default=2300.0,
         help="Umbral superior del Laplaciano. Por encima se descarta por ruido/artefactos."
     )
 
