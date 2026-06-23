@@ -1,6 +1,6 @@
 # Clasificador de Contenidos en Tiempo Real
 
-Este proyecto es un sistema asíncrono que ingiere señales de televisión en vivo (MPEG-TS por UDP), extrae sus metadatos (EIT) y frames, y utiliza un modelo de IA multimodal (`Ministral-3-3B`) para clasificar el tipo de programa emitido en tiempo real.
+Este proyecto es un sistema asíncrono que ingiere señales de televisión en vivo (MPEG-TS por UDP), extrae sus metadatos (EIT) y frames, y utiliza un modelo de IA multimodal (`Ministral-3-3B`) para clasificar el tipo de programa emitido en tiempo real. Cuenta además con un sistema de monitorización especializado para calcular el consumo energético preciso de la ejecución.
 
 ## Arquitectura y Flujo del Sistema
 
@@ -18,7 +18,9 @@ El sistema se divide en dos procesos independientes. El siguiente diagrama detal
     * **Archivos `.csv`**: Se generan dos archivos independientes:
         1. `dataset_tiempo_real.csv`: Un registro bruto que anota todo lo que se captura (evento, horario, duración y la categoría original dada por el radiodifusor).
         2. `reporte_final_predicciones.csv`: El informe de resultados finales dados por el sistema. Incluye información sobre el número de frames analizados, la predicción final de MLLM, y los diferentes valores establecidos para los umbrales.
+        3. `system_monitor.csv`: Serie temporal con muestras de consumo energético, potencia, uso de hardware del sistema y de los subprocesos del proyecto.
     * **Archivos `.json`**: Archivos con la información detallada por evento a nivel de inferencia. Contienen el análisis exhaustivo frame a frame, incluyendo la predicción del MLLM, su porcentaje de confianza, la justificación de la decisión (_reasoning_) y métricas de rendimiento del hardware
+    * * **Archivos `.txt`**: `system_monitor_report.txt` recopila el informe financiero global (coste total de la sesión, estimaciones por hora/día/mes, medias y picos de hardware). El dato `€/kWh`se puede modificar de manera libre.
 * **Blanco/Negro:** Acciones rutinarias y bucles.
 
 
@@ -49,7 +51,7 @@ Los umbrales del filtrado se puede modificar, utilizando:
 
 * **`--ssim-threshold` :** Umbral de similitud (SSIM). Mide la similitud entre el frame de referencia (en este caso, el analizado previamente), y el actual. Preestablecido en 0,6.
 * **`--laplacian-min` :** Umbral mínimo de Laplaciano. Permite eliminar imágenes sin contenido estructural útil, como imágenes en negro o con figuras irrelevantes (como logos grandes). Preestablecido en 70.
-* **`--laplacian-max` :** Umbral máximo de Laplaciano. Permite eliminar aquellos frames con exceso de altas frecuencias, debido a la captura sobre secuencias con alto movimiento que han perdido información útil. Preestablecido en 1500.
+* **`--laplacian-max` :** Umbral máximo de Laplaciano. Permite eliminar aquellos frames con exceso de altas frecuencias, debido a la captura sobre secuencias con alto movimiento que han perdido información útil. Preestablecido en 2300.
 
 ### Paso 2. Terminal 2: Iniciar la Ingesta de Señal
 En una **nueva ventana de terminal** se sintoniza el flujo UDP. En cuanto detecte un programa en emisión, comenzará el proceso de extracción de datos y de frames (a partir del comando FFMPEG).
@@ -60,6 +62,14 @@ python receiver_signal.py --record-ip udp://X.X.X.X:YYYY --record-seconds 3600
 ```
 
 Adicionalmente y de manera opcional, se pueden integrar diferentes modos de configuración como la estrategia de extracción de frames, el intervalo temporal entre extracciones, o la carpeta de almacenamiento de estos.
+
+### Paso 3. Terminal 3: Iniciar el Monitor de Coste Global
+
+En una tercera ventana, arranca el monitor del sistema. Este módulo recopila de manera externa las métricas de consumo de la CPU (pyRAPL), GPU (NVML) y monitoriza los scripts del proyecto (FFmpeg, controller, pipeline,...):
+
+```
+python system_monitor.py
+```
 
 ## Estructura de Salida 
 
@@ -74,3 +84,7 @@ A medida que el sistema avanza, generará automáticamente un árbol de archivos
    * `RESULTADOS_MUX/reporte_final_predicciones.csv`: Resumen inteligente. Contiene la categoría ganadora calculada por el MLLM tras analizar el programa emitido. Incluye además el número de frames analizados y los umbrales establecidos en esa ejecución.
    * `resultados_frames/`: Archivos JSON con la clasificación detallada frame a frame (voto del MLLM, nivel de confianza, razonamiento y métricas de consumo de Hardware).
    * `logs/`: Archivos de depuración (`video_classifier.log`) y registro de latencias puras (`latency.log`).
+
+3. **Outputs del Monitor Global:**
+   * `logs/system_monitor.csv`: Registro continuo que almacena consecutivamente los datos de energía (J), potencias (W), cargas porcentuales (%) consumidos exclusivamente por el entorno del proyecto.
+   * `logs/system_monitor_report.txt`: Detalla un informe de texto final con la potencia media, picos de hardware y el coste exacto (€) de la sesión junto a sus proyecciones a largo plazo. Se calcula en función del parámetro preestablecido.
