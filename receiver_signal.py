@@ -385,7 +385,7 @@ def process_live_mux(args) -> int:
             if not datagram: continue
             usable = len(datagram) - (len(datagram) % TS_PACKET_SIZE)
 
-            # --- COMPROBACIÓN DEL TEMPORIZADOR PARA CADA SERVICIO ---
+            #### COMPROBACIÓN DEL TEMPORIZADOR PARA CADA SERVICIO ####
             current_time = time.time()
             for service in services.values():
                 # Si estamos esperando (hay tiempo registrado y no hay proceso ffmpeg)
@@ -396,7 +396,6 @@ def process_live_mux(args) -> int:
                             service.ffmpeg_cmd, stdin=subprocess.PIPE, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL
                         )
                         print(f"[FFMPEG] {service.service_name} -> Extracción de frames INICIADA (Margen superado)")
-            # --------------------------------------------------------
 
             for i in range(0, usable, TS_PACKET_SIZE):
                 pkt = datagram[i:i + TS_PACKET_SIZE]
@@ -469,8 +468,7 @@ def main() -> int:
     parser.add_argument("--frame-mode", choices=["IFRAMES", "EVERY_N_SECONDS", "IFRAMES_EVERY_N_SECONDS"], default="IFRAMES_EVERY_N_SECONDS")
     parser.add_argument("--seconds", type=float, default=60.0)
     parser.add_argument("--max-frames", type=int, default=10000)
-    # NUEVO PARÁMETRO
-    parser.add_argument("--margin-seconds", type=int, default=10, help="Margen de seguridad en segundos antes de extraer frames (por defecto 300 = 5 min)")
+    parser.add_argument("--margin-seconds", type=int, default=10)
     args = parser.parse_args()
     return process_live_mux(args)
 
