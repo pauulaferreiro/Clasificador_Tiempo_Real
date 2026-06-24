@@ -272,59 +272,51 @@ def normalize_classifier_output(result):
 @monitor_latency
 def main():
     parser = argparse.ArgumentParser(
-        description="Demonio multi-servicio para clasificación en tiempo real"
+        description="Ejecutor para clasificación en tiempo real"
     )
 
     parser.add_argument(
         "--base-frames-dir",
         default="./RESULTADOS_MUX/frames_seleccionados",
-        help="Carpeta raíz donde están los frames por servicio"
     )
 
     parser.add_argument(
         "--base-eit-dir",
-        default="./RESULTADOS_MUX/eit_extraidas",
-        help="Carpeta raíz donde están los XML EIT por servicio"
+        default="./RESULTADOS_MUX/eit_extraidas"
     )
 
     parser.add_argument(
         "--json-out-dir",
-        default="./resultados_frames",
-        help="Carpeta donde se guardarán los JSON de predicciones"
+        default="./resultados_frames"
     )
 
     parser.add_argument(
         "--final-csv",
-        default="./RESULTADOS_MUX/reporte_final_predicciones.csv",
-        help="CSV final con la predicción del modelo por evento"
+        default="./RESULTADOS_MUX/reporte_final_predicciones.csv"
     )
 
     parser.add_argument(
         "--poll-interval",
         type=int,
-        default=5,
-        help="Segundos entre escaneos de carpetas"
+        default=5
     )
 
     parser.add_argument(
         "--ssim-threshold",
         type=float,
-        default=0.6,
-        help="Umbral SSIM. Se aceptan frames con SSIM <= umbral respecto al último frame analizado."
+        default=0.6
     )
 
     parser.add_argument(
         "--laplacian-min",
         type=float,
-        default=70.0,
-        help="Umbral inferior del Laplaciano. Por debajo se descarta por borroso."
+        default=70.0
     )
 
     parser.add_argument(
         "--laplacian-max",
         type=float,
-        default=2300.0,
-        help="Umbral superior del Laplaciano. Por encima se descarta por ruido/artefactos."
+        default=2300.0
     )
 
     args = parser.parse_args()
