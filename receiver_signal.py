@@ -290,8 +290,6 @@ def generate_eit_xml(event: RunningEvent, service_id: int, xml_out_path: Path):
     )
     ET.SubElement(extended_desc, "text").text = event.extended_text or ""
 
-    # Los dejo también por si en el futuro quieres trazabilidad,
-    # pero el DAEMON no los usará para comparar.
     ET.SubElement(ev_node, "content_nibble_1").text = event.content_nibble_1
     ET.SubElement(ev_node, "content_nibble_2").text = event.content_nibble_2
 
