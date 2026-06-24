@@ -1,9 +1,9 @@
 import argparse
 import csv
 import re
-import socket       
+import socket       #para recibir UDP
 import struct
-import subprocess   
+import subprocess   #para lanzar tsp
 import xml.etree.ElementTree as ET
 import os
 import time
@@ -20,6 +20,7 @@ PAT_PID = 0x0000
 SDT_PID = 0x0011
 EIT_PID = 0x0012
 
+#### MAPEO DE CONTENT_NIBBLE_LEVEL_1 -> NOMBRE CATEGORÍA (modificado)
 NIBBLE1_TO_CATEGORY = {
     "0": "Undefined", "1": "Fiction", "2": "News", "3": "Show",
     "4": "Sports", "5": "Cartoons", "6": "Music/Dance",
@@ -30,6 +31,7 @@ NIBBLE1_TO_CATEGORY = {
 def nibble1_to_category(nibble1: str) -> str:
     return NIBBLE1_TO_CATEGORY.get(str(nibble1), "Unknown")
 
+# Limpiar el nombre que se usa para guardar el archivo
 def safe_filename(name: str, max_len: int = 120) -> str:
     name = "".join(ch for ch in name if ch >= " " or ch in "\t")
     name = re.sub(r"[^\w\s\-.]", "_", name.strip() or "SIN_NOMBRE", flags=re.UNICODE)
@@ -38,13 +40,16 @@ def safe_filename(name: str, max_len: int = 120) -> str:
     name = name.strip("_")
     return name[:max_len] or "SIN_NOMBRE"
 
+# Limpiar de espacios el nombre de los eventos
 def normalize_event_name(name: str) -> str:
     return re.sub(r"\s+", " ", name.replace("\n", " ").replace("\r", " ")).strip()
 
+# Convertir intervalo de tiempo a formato hh:mm:ss
 def format_timedelta_hms(td: timedelta) -> str:
     total_seconds = max(0, int(td.total_seconds()))
     return f"{total_seconds // 3600:02d}:{(total_seconds % 3600) // 60:02d}:{total_seconds % 60:02d}"
 
+# Convertir el Decimal Codificado en Binario a un entero
 def bcd_to_int(b: int) -> int:
     return ((b >> 4) * 10) + (b & 0x0F)
 
@@ -52,6 +57,7 @@ def parse_dvb_duration_3bytes(data: bytes) -> timedelta:
     if len(data) != 3: return timedelta(0)
     return timedelta(hours=bcd_to_int(data[0]), minutes=bcd_to_int(data[1]), seconds=bcd_to_int(data[2]))
 
+# Convertir la fecha MJD (usada en DVB) a Año-Mes-Dia --> ECUACIONES SACADAS DE ETSI EN 300 468 (anexo C)
 def mjd_to_ymd(mjd: int) -> Tuple[int, int, int]:
     y_dash = int((mjd - 15078.2) / 365.25)
     m_dash = int((mjd - 14956.1 - int(y_dash * 365.25)) / 30.6001)
@@ -59,6 +65,7 @@ def mjd_to_ymd(mjd: int) -> Tuple[int, int, int]:
     k = 1 if m_dash in (14, 15) else 0
     return y_dash + k + 1900, m_dash - 1 - k * 12, d
 
+# En <start_time> tenemos 5 bytes: 2 para MJD y 3 para BCD (hh:mm:ss) --> ETSI EN 300 468
 def parse_dvb_start_time_5bytes(data: bytes) -> Optional[datetime]:
     if len(data) != 5 or all(b == 0xFF for b in data): return None
     mjd = (data[0] << 8) | data[1]
@@ -111,20 +118,28 @@ class ServiceState:
     
     fragment_index: int = 0
 
+# Ensamblar las tablas enteras PAT/PMT/EIT
 class SectionAssembler:
     def __init__(self) -> None:
         self.buffer = bytearray()
-
+        
+    # Devuelve la lista de todas las secciones extraídas (pusi =1)
     def push_payload(self, payload: bytes, pusi: bool) -> List[bytes]:
         sections = []
         if pusi:
-            if not payload: return sections
+            if not payload: 
+                return sections
+                
+            # pointer_field indica cuantos bytes hay antes de empezar otra sección diferente
             pointer_field = payload[0] 
             if len(payload) < 1 + pointer_field:
-                self.buffer.clear(); return sections
+                self.buffer.clear(); 
+                return sections
+                
             if self.buffer and pointer_field > 0:
                 self.buffer.extend(payload[1:1 + pointer_field])
                 sections.extend(self._extract_sections())
+                
             self.buffer = bytearray(payload[1 + pointer_field:])
             sections.extend(self._extract_sections())
         else:
@@ -137,11 +152,21 @@ class SectionAssembler:
         out = []
         while len(self.buffer) >= 3:
             table_id = self.buffer[0]
-            if table_id == 0xFF: self.buffer.clear(); break
+            if table_id == 0xFF: 
+                self.buffer.clear(); 
+                break
+                
+            #section_length ocupa 12 bits
             section_length = ((self.buffer[1] & 0x0F) << 8) | self.buffer[2]
             total_len = 3 + section_length
-            if section_length > 1021: self.buffer.clear(); break
-            if len(self.buffer) < total_len: break
+
+            # No puede superar 1021 --> dado en estandar ETSI EN 30 468
+            if section_length > 1021: 
+                self.buffer.clear(); 
+                break
+                
+            if len(self.buffer) < total_len: 
+                break
             sec = bytes(self.buffer[:total_len])
             del self.buffer[:total_len]
             out.append(sec)
@@ -151,11 +176,21 @@ def merge_extended_texts(parts: List[str]) -> str:
     cleaned = [normalize_event_name(p) for p in parts if p and normalize_event_name(p)]
     return " ".join(cleaned).strip()
 
+# =========================================================
+# Parseo de paquete TS
+# =========================================================
+
 def parse_ts_packet_header(pkt: bytes) -> Optional[dict]:
-    if len(pkt) != TS_PACKET_SIZE or pkt[0] != SYNC_BYTE: return None
-    pusi = bool(pkt[1] & 0x40)
+    if len(pkt) != TS_PACKET_SIZE or pkt[0] != SYNC_BYTE: 
+        return None
+
+    # LA COLOCACIÓN DE LOS BITS VIENE DADA EN ISO 13818-1.
+    # pusi es 2º bit del byte 1. 
+    pusi = bool(pkt[1] & 0x40)     #0x40 = 0100 0000
+    #PID son 13 bits,los 5 mas bajo del byte 1 y el resto del byte 2
     pid = ((pkt[1] & 0x1F) << 8) | pkt[2]
-    afc = (pkt[3] >> 4) & 0x03
+    #adaption field control. bits 5 y 4 del byte 3
+    afc = (pkt[3] >> 4) & 0x03    #los movemos cuatro posiciones a la derecha y nos quedamos con los dos primeros 0x03=0000 0011
     idx = 4
     if afc in (2, 3):
         if idx >= len(pkt): return None
@@ -163,34 +198,63 @@ def parse_ts_packet_header(pkt: bytes) -> Optional[dict]:
     payload = pkt[idx:] if afc in (1, 3) and idx <= len(pkt) else b""
     return {"pid": pid, "pusi": pusi, "payload": payload, "afc": afc}
 
+
+
+# =========================================================
+# Parse PAT / PMT / SDT / EIT
+# =========================================================
+
+# Convertir cada seccion PAT en un diccionario -> {program_number}, {pmt_pid}
+#### INFORMACION SACADA DE LA TABLA DEL ESTANDAR ISO 13818-1 (pag 43) ####
 def parse_pat_section(section: bytes) -> Dict[int, int]:
     programs = {}
-    if len(section) < 8 or section[0] != 0x00: return programs
+    
+    # 8 es el numero de bytes antes del bucle de la tabla pág 43
+    if len(section) < 8 or section[0] != 0x00: 
+        return programs
+    # Nos quedamos los 12 bits del section_length
+    # 3 bytes iniciales - 4 bytes del CRC (redundancia)
     end = 3 + (((section[1] & 0x0F) << 8) | section[2]) - 4
     idx = 8
+
+    # cada programa en la PAT ocupa 4 bytes 
     while idx + 4 <= end:
-        program_number = (section[idx] << 8) | section[idx + 1]
-        pmt_pid = ((section[idx + 2] & 0x1F) << 8) | section[idx + 3]
+        program_number = (section[idx] << 8) | section[idx + 1] #los dos primeros bytes
+        pmt_pid = ((section[idx + 2] & 0x1F) << 8) | section[idx + 3] #0x1F = 0001 1111
         if program_number != 0: programs[program_number] = pmt_pid
         idx += 4
     return programs
 
+# Extraer los PIDS de los Elementary Streams de cada evento + PID de la PCR
+#### INFORMACION SACADA DE LA TABLA DEL ESTANDAR ISO 13818-1 (pag 46) ####
 def parse_pmt_section(section: bytes) -> Tuple[Optional[int], Set[int]]:
-    if len(section) < 12 or section[0] != 0x02: return None, set()
-    pcr_pid = ((section[8] & 0x1F) << 8) | section[9]
+    #12 es el numero de bytes fijos de la cabecera
+    if len(section) < 12 or section[0] != 0x02: 
+        return None, set()
+        
+    pcr_pid = ((section[8] & 0x1F) << 8) | section[9] #5 bits + byte completo
+    
     idx = 12 + (((section[10] & 0x0F) << 8) | section[11])
     end = 3 + (((section[1] & 0x0F) << 8) | section[2]) - 4
+    
     pids = set()
+    #sacamos los PIDS de los diferentes ES
     while idx + 5 <= end:
         pids.add(((section[idx + 1] & 0x1F) << 8) | section[idx + 2])
         idx += 5 + (((section[idx + 3] & 0x0F) << 8) | section[idx + 4])
     return pcr_pid, pids
 
+#### INFORMACION SACADA DE LA TABLA DEL ESTANDAR ETSI EN 300 468 (pág 32) ####
 def parse_sdt_section(section: bytes) -> Dict[int, str]:
     names = {}
-    if len(section) < 11 or section[0] != 0x42: return names
+    #11 es el numero de bytes fijos de la cabecera
+    if len(section) < 11 or section[0] != 0x42: 
+        return names
+        
     end = 3 + (((section[1] & 0x0F) << 8) | section[2]) - 4
     idx = 11
+    
+    # cada servicio ocupa 5 bytes
     while idx + 5 <= end:
         service_id = (section[idx] << 8) | section[idx + 1]
         dpos, dend = idx + 5, idx + 5 + (((section[idx + 3] & 0x0F) << 8) | section[idx + 4])
@@ -205,12 +269,17 @@ def parse_sdt_section(section: bytes) -> Dict[int, str]:
         idx = dend
     return names
 
+#### INFORMACION SACADA DE LA TABLA DEL ESTANDAR ETSI EN 300 468 (pág 34) ####
 def parse_eit_section(section: bytes) -> Tuple[int, List[RunningEvent]]:
     events = []
-    if len(section) < 14 or section[0] != 0x4E: return 0, events
+    if len(section) < 14 or section[0] != 0x4E: 
+        return 0, events
+        
     service_id = (section[3] << 8) | section[4]
     end = 3 + (((section[1] & 0x0F) << 8) | section[2]) - 4
     idx = 14
+
+    # cada evento ocupa 12 bytes
     while idx + 12 <= end:
         event_id = (section[idx] << 8) | section[idx + 1]
         start_utc = parse_dvb_start_time_5bytes(section[idx + 2:idx + 7])
@@ -222,11 +291,17 @@ def parse_eit_section(section: bytes) -> Tuple[int, List[RunningEvent]]:
         while dpos + 2 <= dend and dpos + 2 <= len(section):
             tag, length = section[dpos], section[dpos + 1]
             body = section[dpos + 2:dpos + 2 + length]
+
+             # short_event_descriptor
             if tag == 0x4D and len(body) >= 5:
                 decoded = clean_dvb_text(body[4:4 + body[3]])
                 if decoded: event_name = normalize_event_name(decoded)
+
+            # content_descriptor
             elif tag == 0x54 and len(body) >= 2:
                 nib1, nib2 = str((body[0] >> 4) & 0x0F), str(body[0] & 0x0F)
+
+            # extended_event_descriptor
             elif tag == 0x4E and len(body) >= 6:
                 items_end = 5 + body[4]
                 if items_end < len(body):
