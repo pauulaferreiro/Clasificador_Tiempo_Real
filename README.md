@@ -1,6 +1,6 @@
 # Clasificador de Contenidos en Tiempo Real
 
-Este proyecto es un sistema asíncrono que ingiere señales de televisión en vivo (MPEG-TS por UDP), extrae sus metadatos (EIT) y frames, y utiliza un modelo de IA multimodal (`Ministral-3-3B`) para clasificar el tipo de programa emitido en tiempo real. Cuenta además con un sistema de monitorización especializado para calcular el consumo energético preciso de la ejecución.
+Este proyecto es un sistema que captura señales de televisión en vivo, extrae sus metadatos (EIT) y frames, y utiliza un modelo de multimodal (`Ministral-3-3B`) para clasificar el tipo de programa emitido en tiempo real. Cuenta además con un sistema de monitorización para calcular el consumo energético de la ejecución.
 
 ## Arquitectura y Flujo del Sistema
 
@@ -10,7 +10,7 @@ El sistema se divide en tres procesos independientes. El siguiente diagrama deta
 
 **Leyenda de colores:**
 * **Azul:** Punto de origen (Señal de entrada UDP/MPEG-TS).
-* **Naranja:** Procesos de extracción, reensamblado de tablas DVB e inferencia de la IA.
+* **Naranja:** Procesos de extracción, reensamblado de tablas DVB e inferencia del modelo.
 * **Verde:** Puntos de control de flujo y filtrado (detección de emisión, umbrales Laplaciano y SSIM).
 * **Violeta:** Outputs y archivos generados por el sistema. 
     * **Archivos `.xml`**: Contienen los metadatos extraídos de la tabla EIT para cada evento. Incluye el título del programa, descripción extendida, horario y calificación por edades en BRUTO.
